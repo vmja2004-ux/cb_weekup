@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>精選 CB 拆解與價值監測看板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Noto+Sans+TC:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', 'Noto Sans TC', sans-serif; }
+        .bar-transition { transition: height 0.3s ease-out, transform 0.2s ease; }
+        .bar-transition:hover { transform: scaleX(1.1); filter: brightness(1.1); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .tab-active { @apply bg-blue-600 text-white shadow-lg; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen p-4 md:p-8">
+
+    <!-- Header -->
+    <header class="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-slate-800 flex items-center gap-2">
+                <i data-lucide="bar-chart-3" class="text-blue-600"></i>
+                精選 CB 拆解與價值監測
+            </h1>
+            <p class="text-slate-500 mt-1">
+                多維度監控：5 日漲幅排名 | CBAS 拆解動能 | 轉換價值篩選
+            </p>
+        </div>
+        <div>
+            <label class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl cursor-pointer transition-all shadow-md active:scale-95 text-sm font-bold">
+                <i data-lucide="upload" size="18"></i>
+                <span>匯入最新 CSV</span>
+                <input type="file" id="csvInput" accept=".csv" class="hidden">
+            </label>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto">
+        <!-- Empty State -->
+        <div id="emptyState" class="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-20 text-center">
+            <div class="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <i data-lucide="file-up" class="text-blue-500" size="40"></i>
+            </div>
+            <h3 class="text-2xl font-bold text-slate-700">請上傳 CB 拆解資料表</h3>
+            <p class="text-slate-500 max-w-sm mx-auto mt-2 text-lg">系統將根據您的篩選基準自動產出排行榜。</p>
+        </div>
+
+        <!-- Content Area -->
+        <div id="dashboardContent" class="hidden space-y-6">
+            
+            <!-- Tab Switcher -->
+            <div class="flex flex-wrap gap-2 mb-4">
+                <button id="tabCbas" onclick="switchTab('cbas')" class="px-6 py-2.5 rounded-xl font-bold transition-all bg-white text-slate-500 shadow-sm border border-slate-200 hover:bg-slate-50 flex items-center gap-2">
+                    <i data-lucide="activity" size="16"></i>
+                    CBAS 拆解動能榜 (Top 30)
+                </button>
+                <button id="tabValue" onclick="switchTab('value')" class="px-6 py-2.5 rounded-xl font-bold transition-all bg-white text-slate-500 shadow-sm border border-slate-200 hover:bg-slate-50 flex items-center gap-2">
+                    <i data-lucide="zap" size="16"></i>
+                    轉換價值 < 200 榜 (Top 30)
+                </button>
+            </div>
+
+            <!-- Control Bar -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="md:col-span-2 relative">
+                    <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size="18"></i>
+                    <input 
+                        type="text" 
+                        id="searchInput"
+                        placeholder="搜尋代號或名稱..." 
+                        class="w-full pl-12 pr-4 py-3 rounded-2xl border-none shadow-sm focus:ring-2 focus:ring-blue-500/20 transition-all bg-white text-lg"
+                    >
+                </div>
+                <div class="flex gap-2 md:col-span-2">
+                    <div class="flex-1 bg-emerald-50 border border-emerald-100 p-3 rounded-2xl flex flex-col justify-center">
+                        <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">目前清單總數</span>
+                        <span id="activeCount" class="text-xl font-black text-emerald-700">0 <span class="text-xs font-normal text-emerald-500">檔</span></span>
+                    </div>
+                    <div class="flex-1 bg-white border border-slate-100 p-3 rounded-2xl flex flex-col justify-center shadow-sm text-center">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CSV 原始樣本</span>
+                        <span id="rawCount" class="text-xl font-black text-slate-600">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- List Table -->
+            <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/60 border border-slate-100 overflow-hidden">
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-left border-collapse min-w-[1000px]">
+                        <thead>
+                            <tr class="bg-slate-50/50 border-b border-slate-100">
+                                <th class="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-widest w-16">Rank</th>
+                                <th class="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-widest">標的資訊</th>
+                                <th class="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-widest">5日累計漲幅</th>
+                                <th class="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-widest">最新轉換價值</th>
+                                <th class="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">
+                                    <div class="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+                                        <i data-lucide="activity" size="12"></i> CBAS 拆解量 (T-1 至 T-10)
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y divide-slate-50">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Detailed Logic Disclaimer -->
+            <div class="bg-white border border-slate-200 p-5 rounded-3xl flex gap-4 items-start shadow-sm">
+                <div class="bg-blue-50 p-2 rounded-xl text-blue-600">
+                    <i data-lucide="info" size="20"></i>
+                </div>
+                <div class="text-sm text-slate-600">
+                    <p class="font-bold text-slate-800 text-base">目前頁籤篩選說明</p>
+                    <div id="logicDesc" class="mt-2 text-slate-500">
+                        請匯入資料以查看詳細篩選邏輯。
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Loading -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-md hidden items-center justify-center z-50 text-center p-4">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full">
+            <div class="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+            <p class="font-black text-xl text-slate-800">運算中</p>
+            <p class="text-slate-500 mt-2 text-sm">正在執行多重維度篩選與排序...</p>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'cbas';
+        let rawDataCount = 0;
+        let cbasList = [];
+        let valueList = [];
+
+        lucide.createIcons();
+
+        document.getElementById('csvInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            showLoading(true);
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                processData(event.target.result);
+                showLoading(false);
+            };
+            reader.readAsText(file);
+        });
+
+        document.getElementById('searchInput').addEventListener('input', () => renderTable());
+
+        function showLoading(show) {
+            const el = document.getElementById('loadingOverlay');
+            el.classList.toggle('hidden', !show);
+            el.classList.toggle('flex', show);
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            renderTable();
+        }
+
+        function processData(csvText) {
+            const lines = csvText.split('\n').filter(l => l.trim() !== '');
+            if (lines.length < 3) return;
+
+            const splitLine = (line) => {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"') inQuotes = !inQuotes;
+                    else if (char === ',' && !inQuotes) {
+                        result.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                result.push(current.trim());
+                return result;
+            };
+
+            const headerRow1 = splitLine(lines[0]);
+            const headerRow2 = splitLine(lines[1]);
+            const rows = lines.slice(2);
+            rawDataCount = rows.length;
+
+            const getCategory = (index) => {
+                for (let i = index; i >= 0; i--) {
+                    if (headerRow1[i]) return headerRow1[i];
+                }
+                return '';
+            };
+
+            let priceCols = [], allCbasCols = [], convCol = null, codeIdx = -1, nameIdx = -1;
+
+            headerRow2.forEach((h, i) => {
+                const cat = getCategory(i);
+                if (h === '代號') codeIdx = i;
+                if (h === '名稱') nameIdx = i;
+                if (cat.includes('標的股票漲跌幅') && h.includes('/') && priceCols.length < 5) priceCols.push({ name: h, idx: i });
+                if (cat.includes('CBAS拆解') && h.includes('/')) allCbasCols.push({ name: h, idx: i });
+                if (cat.includes('轉換價值') && h.includes('/') && !convCol) convCol = { name: h, idx: i };
+            });
+
+            const t1toT10Cols = allCbasCols.slice(1, 11);
+
+            const allProcessed = rows.map(line => {
+                const vals = splitLine(line);
+                if (vals.length < Math.max(codeIdx, nameIdx)) return null;
+
+                let cumChange = 0;
+                const priceSteps = priceCols.map(c => {
+                    const v = parseFloat(vals[c.idx]?.replace('%', '')) || 0;
+                    cumChange += v;
+                    return { date: c.name, val: v };
+                });
+
+                let totalVol = 0;
+                const cbasHist = t1toT10Cols.map(c => {
+                    const v = parseInt(vals[c.idx]?.replace(/,/g, '')) || 0;
+                    totalVol += Math.abs(v);
+                    return { date: c.name, val: v };
+                });
+
+                const convVal = convCol ? (parseFloat(vals[convCol.idx]?.replace(/,/g, '')) || 0) : 0;
+
+                return {
+                    code: vals[codeIdx], name: vals[nameIdx], cumChange, priceSteps, 
+                    cbasHist, totalVol, convVal, convDate: convCol ? convCol.name : ''
+                };
+            }).filter(item => item !== null);
+
+            // 分類數據
+            // 1. CBAS 拆解動能清單 (排除 totalVol == 0)
+            cbasList = allProcessed.filter(d => d.totalVol > 0)
+                                   .sort((a,b) => b.cumChange - a.cumChange)
+                                   .slice(0, 30);
+            
+            // 2. 轉換價值 < 200 清單
+            valueList = allProcessed.filter(d => d.convVal < 200)
+                                    .sort((a,b) => b.cumChange - a.cumChange)
+                                    .slice(0, 30);
+
+            document.getElementById('rawCount').innerText = rawDataCount;
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('dashboardContent').classList.remove('hidden');
+            
+            renderTable();
+        }
+
+        function renderTable() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const list = currentTab === 'cbas' ? cbasList : valueList;
+            const filtered = list.filter(d => d.name.toLowerCase().includes(searchTerm) || d.code.toLowerCase().includes(searchTerm));
+            
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            // 更新按鈕樣式
+            document.getElementById('tabCbas').className = `px-6 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'cbas' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-500 shadow-sm border border-slate-200'}`;
+            document.getElementById('tabValue').className = `px-6 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 ${currentTab === 'value' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-500 shadow-sm border border-slate-200'}`;
+
+            // 更新說明
+            const desc = document.getElementById('logicDesc');
+            if(currentTab === 'cbas') {
+                desc.innerHTML = `<strong>CBAS 拆解動能榜：</strong>排除 T-1 至 T-10 拆解量均為 0 的標的，按「5 日漲幅」取 Top 30。`;
+            } else {
+                desc.innerHTML = `<strong>轉換價值 < 200 榜：</strong>篩選轉換價值低於 200 的標的，按「5 日漲幅」取 Top 30（含無拆解量標的）。`;
+            }
+
+            document.getElementById('activeCount').innerText = filtered.length;
+
+            filtered.forEach((item, idx) => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-blue-50/40 transition-all group';
+                const rankClass = idx < 3 ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg shadow-orange-200' : 'bg-slate-100 text-slate-400';
+                
+                const barsHtml = item.cbasHist.map(c => {
+                    const h = Math.min(Math.max(Math.abs(c.val) * 1.5, 4), 45);
+                    const bColor = c.val > 0 ? 'bg-blue-500 shadow-sm shadow-blue-200' : (c.val < 0 ? 'bg-orange-400 shadow-sm shadow-orange-100' : 'bg-slate-200');
+                    return `<div class="flex flex-col items-center group/bar relative">
+                                <div class="w-5 rounded-t-md bar-transition ${bColor}" style="height: ${h}px"></div>
+                                <span class="text-[9px] mt-1.5 text-slate-400 font-mono font-bold scale-90">${c.val}</span>
+                                <div class="absolute bottom-full mb-3 hidden group-hover/bar:block bg-slate-900 text-white text-[10px] py-1.5 px-2.5 rounded-lg whitespace-nowrap z-20 shadow-xl border border-slate-700">
+                                    <span class="text-slate-400 mr-2">${c.date}</span>
+                                    <span class="font-bold">${c.val > 0 ? '+' : ''}${c.val}</span>
+                                </div>
+                            </div>`;
+                }).join('');
+
+                row.innerHTML = `
+                    <td class="px-6 py-4">
+                        <div class="w-10 h-10 flex items-center justify-center rounded-xl font-black text-lg ${rankClass}">${idx + 1}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex flex-col">
+                            <span class="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition-colors">${item.name}</span>
+                            <span class="text-xs font-mono text-slate-400 bg-slate-100 self-start px-1.5 py-0.5 rounded mt-1">${item.code}</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex flex-col">
+                            <span class="text-2xl font-black tracking-tighter ${item.cumChange >= 0 ? 'text-rose-500' : 'text-emerald-500'}">
+                                ${item.cumChange >= 0 ? '+' : ''}${item.cumChange.toFixed(2)}%
+                            </span>
+                            <div class="flex gap-1 mt-1.5">
+                                ${item.priceSteps.map(p => `<div class="w-2.5 h-1.5 rounded-full ${p.val >= 0 ? 'bg-rose-400' : 'bg-emerald-400'}" title="${p.date}: ${p.val}%"></div>`).join('')}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <div class="inline-flex flex-col px-3 py-1.5 rounded-xl ${item.convVal > 100 ? 'bg-amber-50 border border-amber-100' : 'bg-slate-50 border border-slate-100'}">
+                            <span class="text-xl font-black ${item.convVal > 100 ? 'text-amber-600' : 'text-slate-600'}">${item.convVal.toFixed(2)}</span>
+                            <span class="text-[10px] text-slate-400 font-medium">(${item.convDate})</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 bg-slate-50/30">
+                        <div class="flex justify-center items-end gap-1.5 h-14 relative pt-4">${barsHtml}</div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>
