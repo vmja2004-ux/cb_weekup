@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>精選 CB 拆解與價值監測看板</title>
+    <title>精選 CB 週漲幅及拆解趨勢看板</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -90,12 +90,13 @@
             <!-- List Table -->
             <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/60 border border-slate-100 overflow-hidden">
                 <div class="overflow-x-auto custom-scrollbar">
-                    <table class="w-full text-left border-collapse min-w-[1000px]">
+                    <table class="w-full text-left border-collapse min-w-[1200px]">
                         <thead>
                             <tr class="bg-slate-50/50 border-b border-slate-100">
                                 <th class="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-widest w-16">Rank</th>
                                 <th class="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-widest">標的資訊</th>
                                 <th class="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-widest">5日累計漲幅</th>
+                                <th class="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">剩餘 %</th>
                                 <th class="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-widest">最新轉換價值</th>
                                 <th class="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">
                                     <div class="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
@@ -201,12 +202,13 @@
                 return '';
             };
 
-            let priceCols = [], allCbasCols = [], convCol = null, codeIdx = -1, nameIdx = -1;
+            let priceCols = [], allCbasCols = [], convCol = null, codeIdx = -1, nameIdx = -1, remIdx = -1;
 
             headerRow2.forEach((h, i) => {
                 const cat = getCategory(i);
                 if (h === '代號') codeIdx = i;
                 if (h === '名稱') nameIdx = i;
+                if (h === '剩餘%') remIdx = i;
                 if (cat.includes('標的股票漲跌幅') && h.includes('/') && priceCols.length < 5) priceCols.push({ name: h, idx: i });
                 if (cat.includes('CBAS拆解') && h.includes('/')) allCbasCols.push({ name: h, idx: i });
                 if (cat.includes('轉換價值') && h.includes('/') && !convCol) convCol = { name: h, idx: i };
@@ -233,20 +235,20 @@
                 });
 
                 const convVal = convCol ? (parseFloat(vals[convCol.idx]?.replace(/,/g, '')) || 0) : 0;
+                const remPercent = remIdx !== -1 ? vals[remIdx] : 'N/A';
 
                 return {
                     code: vals[codeIdx], name: vals[nameIdx], cumChange, priceSteps, 
-                    cbasHist, totalVol, convVal, convDate: convCol ? convCol.name : ''
+                    cbasHist, totalVol, convVal, convDate: convCol ? convCol.name : '',
+                    remPercent
                 };
             }).filter(item => item !== null);
 
             // 分類數據
-            // 1. CBAS 拆解動能清單 (排除 totalVol == 0)
             cbasList = allProcessed.filter(d => d.totalVol > 0)
                                    .sort((a,b) => b.cumChange - a.cumChange)
                                    .slice(0, 30);
             
-            // 2. 轉換價值 < 200 清單
             valueList = allProcessed.filter(d => d.convVal < 200)
                                     .sort((a,b) => b.cumChange - a.cumChange)
                                     .slice(0, 30);
@@ -285,6 +287,10 @@
                 row.className = 'hover:bg-blue-50/40 transition-all group';
                 const rankClass = idx < 3 ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg shadow-orange-200' : 'bg-slate-100 text-slate-400';
                 
+                // 剩餘 % 樣式判斷 (若低於 10% 則顯示紅色警戒)
+                const remNum = parseFloat(item.remPercent.replace('%', ''));
+                const remClass = remNum < 10 ? 'text-rose-600 font-bold' : 'text-slate-500';
+
                 const barsHtml = item.cbasHist.map(c => {
                     const h = Math.min(Math.max(Math.abs(c.val) * 1.5, 4), 45);
                     const bColor = c.val > 0 ? 'bg-blue-500 shadow-sm shadow-blue-200' : (c.val < 0 ? 'bg-orange-400 shadow-sm shadow-orange-100' : 'bg-slate-200');
@@ -317,6 +323,9 @@
                                 ${item.priceSteps.map(p => `<div class="w-2.5 h-1.5 rounded-full ${p.val >= 0 ? 'bg-rose-400' : 'bg-emerald-400'}" title="${p.date}: ${p.val}%"></div>`).join('')}
                             </div>
                         </div>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <span class="text-sm font-mono ${remClass}">${item.remPercent}</span>
                     </td>
                     <td class="px-6 py-4 text-center">
                         <div class="inline-flex flex-col px-3 py-1.5 rounded-xl ${item.convVal > 100 ? 'bg-amber-50 border border-amber-100' : 'bg-slate-50 border border-slate-100'}">
